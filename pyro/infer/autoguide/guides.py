@@ -15,11 +15,13 @@ For example to generate a mean field Gaussian guide::
 Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
+
 import functools
 import operator
 import warnings
 import weakref
 from contextlib import ExitStack
+from operator import attrgetter
 
 import torch
 from torch import nn
@@ -38,7 +40,7 @@ from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.util import site_is_subsample
 
 from .initialization import InitMessenger, init_to_feasible, init_to_median
-from .utils import _product, deep_getattr, deep_setattr, helpful_support_errors
+from .utils import _product, deep_setattr, helpful_support_errors
 
 
 def prototype_hide_fn(msg):
@@ -132,20 +134,20 @@ class AutoGuide(PyroModule):
                 plates = self.create_plates(*args, **kwargs)
                 if isinstance(plates, pyro.plate):
                     plates = [plates]
-                assert all(
-                    isinstance(p, pyro.plate) for p in plates
-                ), "create_plates() returned a non-plate"
+                assert all(isinstance(p, pyro.plate) for p in plates), (
+                    "create_plates() returned a non-plate"
+                )
                 self.plates = {p.name: p for p in plates}
             for name, frame in sorted(self._prototype_frames.items()):
                 if name not in self.plates:
-                    full_size = getattr(frame, "full_size", frame.size)
+                    full_size = frame.full_size or frame.size
                     self.plates[name] = pyro.plate(
                         name, full_size, dim=frame.dim, subsample_size=frame.size
                     )
         else:
-            assert (
-                self.create_plates is None
-            ), "Cannot pass create_plates() to non-master guide"
+            assert self.create_plates is None, (
+                "Cannot pass create_plates() to non-master guide"
+            )
             self.plates = self.master().plates
         return self.plates
 
@@ -182,7 +184,7 @@ class AutoGuide(PyroModule):
 
 class AutoGuideList(AutoGuide, nn.ModuleList):
     """
-    Container class to combine multiple automatic guides.
+    Container class to combine multiple automatic or custom guides.
 
     Example usage::
 
@@ -203,7 +205,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
 
     def append(self, part):
         """
-        Add an automatic guide for part of the model. The guide should
+        Add an automatic or custom guide for part of the model. The guide should
         have been created by blocking the model to restrict to a subset of
         sample sites. No two parts should operate on any one sample site.
 
@@ -286,15 +288,15 @@ class AutoCallable(AutoGuide):
             ...
 
         guide = AutoGuideList(model)
-        guide.add(AutoDelta(poutine.block(model, expose=['my_global_param']))
-        guide.add(my_local_guide)  # automatically wrapped in an AutoCallable
+        guide.append(AutoDelta(poutine.block(model, expose=['my_global_param']))
+        guide.append(my_local_guide)  # automatically wrapped in an AutoCallable
 
     To specify a median callable, you can instead::
 
         def my_local_median(*args, **kwargs)
             ...
 
-        guide.add(AutoCallable(model, my_local_guide, my_local_median))
+        guide.append(AutoCallable(model, my_local_guide, my_local_median))
 
     For more complex guides that need e.g. access to plates, users should
     instead subclass ``AutoGuide``.
@@ -363,7 +365,7 @@ class AutoDelta(AutoGuide):
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
-                full_size = getattr(frame, "full_size", frame.size)
+                full_size = frame.full_size or frame.size
                 if full_size != frame.size:
                     dim = frame.dim - event_dim
                     value = periodic_repeat(value, full_size, dim).contiguous()
@@ -475,7 +477,7 @@ class AutoNormal(AutoGuide):
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
-                full_size = getattr(frame, "full_size", frame.size)
+                full_size = frame.full_size or frame.size
                 if full_size != frame.size:
                     dim = frame.dim - event_dim
                     init_loc = periodic_repeat(init_loc, full_size, dim).contiguous()
@@ -491,8 +493,8 @@ class AutoNormal(AutoGuide):
             )
 
     def _get_loc_and_scale(self, name):
-        site_loc = deep_getattr(self.locs, name)
-        site_scale = deep_getattr(self.scales, name)
+        site_loc = attrgetter(name)(self.locs)
+        site_scale = attrgetter(name)(self.scales)
         return site_loc, site_scale
 
     def forward(self, *args, **kwargs):
@@ -899,7 +901,10 @@ class AutoMultivariateNormal(AutoContinuous):
         return dist.MultivariateNormal(self.loc, scale_tril=scale_tril)
 
     def _loc_scale(self, *args, **kwargs):
-        return self.loc, self.scale * self.scale_tril.diag()
+        scale_tril = self.scale[..., None] * self.scale_tril
+        scale = scale_tril.pow(2).sum(-1).sqrt()
+        assert scale.shape == self.loc.shape
+        return self.loc, scale
 
 
 class AutoDiagonalNormal(AutoContinuous):

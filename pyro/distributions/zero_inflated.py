@@ -60,11 +60,11 @@ class ZeroInflatedDistribution(TorchDistribution):
 
     @lazy_property
     def gate(self):
-        return logits_to_probs(self.gate_logits)
+        return logits_to_probs(self.gate_logits, is_binary=True)
 
     @lazy_property
     def gate_logits(self):
-        return probs_to_logits(self.gate)
+        return probs_to_logits(self.gate, is_binary=True)
 
     def log_prob(self, value):
         if self._validate_args:
@@ -97,9 +97,9 @@ class ZeroInflatedDistribution(TorchDistribution):
 
     @lazy_property
     def variance(self):
-        return (1 - self.gate) * (
-            self.base_dist.mean**2 + self.base_dist.variance
-        ) - (self.mean) ** 2
+        return (1 - self.gate) * (self.base_dist.mean**2 + self.base_dist.variance) - (
+            self.mean
+        ) ** 2
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(type(self), _instance)
@@ -176,7 +176,7 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
         logits=None,
         gate=None,
         gate_logits=None,
-        validate_args=None
+        validate_args=None,
     ):
         base_dist = NegativeBinomial(
             total_count=total_count,

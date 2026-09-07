@@ -38,7 +38,7 @@ def laplace_eig(
     final_num_samples,
     y_dist=None,
     eig=True,
-    **prior_entropy_kwargs
+    **prior_entropy_kwargs,
 ):
     """
     Estimates the expected information gain (EIG) by making repeated Laplace approximations to the posterior.
@@ -158,7 +158,7 @@ def vi_eig(
     is_parameters,
     y_dist=None,
     eig=True,
-    **prior_entropy_kwargs
+    **prior_entropy_kwargs,
 ):
     """.. deprecated:: 0.4.1
         Use `posterior_eig` instead.
@@ -454,7 +454,7 @@ def posterior_eig(
     eig=True,
     prior_entropy_kwargs={},
     *args,
-    **kwargs
+    **kwargs,
 ):
     """
     Posterior estimate of expected information gain (EIG) computed from the average posterior entropy (APE)
@@ -517,7 +517,7 @@ def posterior_eig(
         final_design=final_design,
         final_num_samples=final_num_samples,
         *args,
-        **kwargs
+        **kwargs,
     )
     return _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs)
 
@@ -535,9 +535,8 @@ def _posterior_ape(
     final_design=None,
     final_num_samples=None,
     *args,
-    **kwargs
+    **kwargs,
 ):
-
     loss = _posterior_loss(
         model, guide, observation_labels, target_labels, *args, **kwargs
     )
@@ -834,7 +833,6 @@ def opt_eig_ape_loss(
     final_design=None,
     final_num_samples=None,
 ):
-
     if final_design is None:
         final_design = design
     if final_num_samples is None:
@@ -889,7 +887,6 @@ def _donsker_varadhan_loss(model, T, observation_labels, target_labels):
     ewma_log = EwmaLog(alpha=0.90)
 
     def loss_fn(design, num_particles, **kwargs):
-
         try:
             pyro.module("T", T)
         except AssertionError:
@@ -933,7 +930,6 @@ def _posterior_loss(
     """Posterior loss: to evaluate directly use `posterior_eig` setting `num_steps=0`, `eig=False`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
-
         expanded_design = lexpand(design, num_particles)
 
         # Sample from p(y, theta | d)
@@ -970,7 +966,6 @@ def _marginal_loss(model, guide, observation_labels, target_labels):
     """Marginal loss: to evaluate directly use `marginal_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
-
         expanded_design = lexpand(design, num_particles)
 
         # Sample from p(y | d)
@@ -1002,7 +997,6 @@ def _marginal_likelihood_loss(
     """Marginal_likelihood loss: to evaluate directly use `marginal_likelihood_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
-
         expanded_design = lexpand(design, num_particles)
 
         # Sample from p(y | d)
@@ -1043,7 +1037,6 @@ def _lfire_loss(
     """LFIRE loss: to evaluate directly use `lfire_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
-
         try:
             pyro.module("h", h)
         except AssertionError:
@@ -1198,9 +1191,7 @@ class EwmaLog:
         else:
             ewma = inputs * (1.0 - self.alpha) / (1 - self.alpha**self.n) + torch.exp(
                 self.s - s
-            ) * self.ewma * (self.alpha - self.alpha**self.n) / (
-                1 - self.alpha**self.n
-            )
+            ) * self.ewma * (self.alpha - self.alpha**self.n) / (1 - self.alpha**self.n)
         self.ewma = ewma.detach()
         self.s = s.detach()
         return _ewma_log_fn(inputs, ewma)

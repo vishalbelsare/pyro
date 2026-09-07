@@ -34,7 +34,7 @@ class LatentStableReparam(Reparam):
 
     [1] J.P. Nolan (2017).
         Stable Distributions: Models for Heavy Tailed Data.
-        http://fs2.american.edu/jpnolan/www/stable/chap1.pdf
+        https://edspace.american.edu/jpnolan/wp-content/uploads/sites/1720/2020/09/Chap1.pdf
     """
 
     def apply(self, msg):
@@ -44,7 +44,11 @@ class LatentStableReparam(Reparam):
         is_observed = msg["is_observed"]
 
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
+        assert (
+            isinstance(fn, dist.Stable)
+            and fn.coords == "S0"
+            and not isinstance(fn, dist.StableWithLogProb)
+        )
         if is_observed:
             raise NotImplementedError(
                 f"At pyro.sample({repr(name)},...), "
@@ -101,7 +105,11 @@ class SymmetricStableReparam(Reparam):
         is_observed = msg["is_observed"]
 
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
+        assert (
+            isinstance(fn, dist.Stable)
+            and fn.coords == "S0"
+            and not isinstance(fn, dist.StableWithLogProb)
+        )
         if is_validation_enabled():
             if not (fn.skew == 0).all():
                 raise ValueError("SymmetricStableReparam found nonzero skew")
@@ -158,7 +166,11 @@ class StableReparam(Reparam):
         is_observed = msg["is_observed"]
 
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
+        assert (
+            isinstance(fn, dist.Stable)
+            and fn.coords == "S0"
+            and not isinstance(fn, dist.StableWithLogProb)
+        )
 
         # Strategy: Let X ~ S0(a,b,s,m) be the stable variable of interest.
         # 1. WLOG scale and shift so s=1 and m=0, additionally shifting to convert

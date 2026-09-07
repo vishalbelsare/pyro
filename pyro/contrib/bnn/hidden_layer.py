@@ -55,6 +55,7 @@ class HiddenLayer(TorchDistribution):
     "Variational dropout and the local reparameterization trick."
     Advances in Neural Information Processing Systems. 2015.
     """
+
     has_rsample = True
 
     def __init__(
@@ -71,9 +72,9 @@ class HiddenLayer(TorchDistribution):
         self.X = X
         self.dim_X = X.size(-1)
         self.dim_H = A_mean.size(-1)
-        assert (
-            A_mean.size(0) == self.dim_X
-        ), "The dimensions of X and A_mean and A_scale must match accordingly; see documentation"
+        assert A_mean.size(0) == self.dim_X, (
+            "The dimensions of X and A_mean and A_scale must match accordingly; see documentation"
+        )
         self.A_mean = A_mean
         self.A_scale = A_scale
         self.non_linearity = non_linearity

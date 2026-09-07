@@ -41,7 +41,7 @@ References
 """
 
 
-torch.set_default_tensor_type("torch.FloatTensor")
+torch.set_default_dtype(torch.float32)
 
 
 def dot(X, Z):
@@ -295,7 +295,7 @@ def main(args):
         with torch.no_grad():
             init_losses.append(loss_fn(model, guide, X, Y, hypers).item())
 
-    pyro.set_rng_seed(np.argmin(init_losses))
+    pyro.set_rng_seed(int(np.argmin(init_losses)))
     pyro.clear_param_store()
     guide = AutoDelta(model, init_loc_fn=init_loc_fn)
 
@@ -364,7 +364,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.9.1")
     parser = argparse.ArgumentParser(description="Krylov KIT")
     parser.add_argument("--num-data", type=int, default=750)
     parser.add_argument("--num-steps", type=int, default=1000)

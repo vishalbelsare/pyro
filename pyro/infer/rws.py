@@ -85,9 +85,9 @@ class ReweightedWakeSleep(ELBO):
         strict_enumeration_warning=True,
     ):
         # force K > 1 otherwise SNIS not possible
-        assert (
-            num_particles > 1
-        ), "Reweighted Wake Sleep needs to be run with more than one particle"
+        assert num_particles > 1, (
+            "Reweighted Wake Sleep needs to be run with more than one particle"
+        )
 
         super().__init__(
             num_particles=num_particles,
@@ -203,9 +203,12 @@ class ReweightedWakeSleep(ELBO):
         phi_loss = (
             sleep_phi_loss
             if self.insomnia == 0
-            else wake_phi_loss
-            if self.insomnia == 1
-            else self.insomnia * wake_phi_loss + (1.0 - self.insomnia) * sleep_phi_loss
+            else (
+                wake_phi_loss
+                if self.insomnia == 1
+                else self.insomnia * wake_phi_loss
+                + (1.0 - self.insomnia) * sleep_phi_loss
+            )
         )
 
         return wake_theta_loss, phi_loss

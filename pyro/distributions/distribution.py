@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import inspect
 from abc import ABCMeta, abstractmethod
+
+import torch
 
 from pyro.distributions.score_parts import ScoreParts
 
@@ -10,16 +13,17 @@ COERCIONS = []
 
 
 class DistributionMeta(ABCMeta):
+    def __init__(cls, *args, **kwargs):
+        signature = inspect.signature(functools.partial(cls.__init__, None))
+        cls.__signature__ = signature
+        return super().__init__(*args, **kwargs)
+
     def __call__(cls, *args, **kwargs):
         for coerce_ in COERCIONS:
             result = coerce_(cls, args, kwargs)
             if result is not None:
                 return result
         return super().__call__(*args, **kwargs)
-
-    @property
-    def __wrapped__(cls):
-        return functools.partial(cls.__init__, None)
 
 
 class Distribution(metaclass=DistributionMeta):
@@ -120,7 +124,7 @@ class Distribution(metaclass=DistributionMeta):
                 log_prob=log_prob, score_function=log_prob, entropy_term=0
             )
 
-    def enumerate_support(self, expand=True):
+    def enumerate_support(self, expand: bool = True) -> torch.Tensor:
         """
         Returns a representation of the parametrized distribution's support,
         along the first dimension. This is implemented only by discrete

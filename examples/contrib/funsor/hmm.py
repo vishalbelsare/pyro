@@ -42,6 +42,7 @@ Du Phan, Jonathan P Chen. https://arxiv.org/abs/1910.10775
 Fritz Obermeyer, Eli Bingham, Martin Jankowiak, Justin Chiu,
 Neeraj Pradhan, Alexander Rush, Noah Goodman. https://arxiv.org/abs/1902.03210
 """
+
 import argparse
 import functools
 import logging
@@ -177,6 +178,7 @@ def model_0(sequences, lengths, args, batch_size=None, include_prior=True):
 # compiler.  To add batch support, we'll introduce a second plate "sequences"
 # and randomly subsample data to size batch_size.  To add jit support we
 # silence some warnings and try to avoid dynamic program structure.
+
 
 # Note that this is the "HMM" model in reference [1] (with the difference that
 # in [1] the probabilities probs_x and probs_y are not MAP-regularized with
@@ -569,10 +571,13 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
         for t in pyro.markov(range(lengths.max()), history=2):
             with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
                 probs_x_t = Vindex(probs_x)[x_prev, x_curr]
-                x_prev, x_curr = x_curr, pyro.sample(
-                    "x_{}".format(t),
-                    dist.Categorical(probs_x_t),
-                    infer={"enumerate": "parallel"},
+                x_prev, x_curr = (
+                    x_curr,
+                    pyro.sample(
+                        "x_{}".format(t),
+                        dist.Categorical(probs_x_t),
+                        infer={"enumerate": "parallel"},
+                    ),
                 )
                 with tones_plate:
                     probs_y_t = probs_y[x_curr.squeeze(-1)]
@@ -626,6 +631,7 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
                         dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
                         obs=Vindex(sequences)[batch, t],
                     )
+                x_prev = x_curr
 
 
 # Let's see how vectorizing time dimension changes the shapes of sample sites:
@@ -644,11 +650,11 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
 #                      value       16  1  1  1 |
 #                   y_0 dist       16 10  1 51 |
 #                      value          10  1 51 |
-#  x_slice(0, 71, None) dist          10 71  1 |
+#  x_slice(0, 71, None) dist       16 10 71  1 |
 #                      value    16  1  1  1  1 |
 #  y_slice(0, 71, None) dist    16  1 10 71 51 |
 #                      value          10 71 51 |
-#  x_slice(1, 72, None) dist          10 71  1 |
+#  x_slice(1, 72, None) dist    16  1 10 71  1 |
 #                      value 16  1  1  1  1  1 |
 #  y_slice(1, 72, None) dist 16  1  1 10 71 51 |
 #                      value          10 71 51 |
@@ -668,7 +674,7 @@ models = {
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_device("cuda")
 
     logging.info("Loading data")
     data = poly.load_data(poly.JSB_CHORALES)
@@ -735,9 +741,11 @@ def main(args):
         elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2)
         tmc_model = handlers.infer_config(
             model,
-            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False}
-            if msg["infer"].get("enumerate", None) == "parallel"
-            else {},
+            lambda msg: (
+                {"num_samples": args.tmc_num_samples, "expand": False}
+                if msg["infer"].get("enumerate", None) == "parallel"
+                else {}
+            ),
         )  # noqa: E501
         svi = infer.SVI(tmc_model, guide, optimizer, elbo)
     else:
@@ -819,7 +827,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.9.1")
     parser = argparse.ArgumentParser(
         description="MAP Baum-Welch learning Bach Chorales"
     )

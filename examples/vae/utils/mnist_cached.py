@@ -150,7 +150,6 @@ class MNISTCached(MNIST):
         ], "invalid train/test option values"
 
         if mode in ["sup", "unsup", "valid"]:
-
             # transform the training data if transformations are provided
             if transform is not None:
                 self.data = transform(self.data.float())
@@ -183,9 +182,9 @@ class MNISTCached(MNIST):
                 self.data = MNISTCached.train_data_unsup
 
                 # making sure that the unsupervised labels are not available to inference
-                self.targets = (
-                    torch.Tensor(MNISTCached.train_labels_unsup.shape[0]).view(-1, 1)
-                ) * np.nan
+                self.targets = torch.full(
+                    (MNISTCached.train_labels_unsup.shape[0], 1), torch.nan
+                )
             else:
                 self.data, self.targets = (
                     MNISTCached.data_valid,

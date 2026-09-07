@@ -13,6 +13,7 @@ http://docs.pyro.ai/en/latest/contrib.cevae.html
     http://papers.nips.cc/paper/7223-causal-effect-inference-with-deep-latent-variable-models.pdf
     https://github.com/AMLab-Amsterdam/CEVAE
 """
+
 import argparse
 import logging
 
@@ -45,7 +46,7 @@ def generate_data(args):
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_device("cuda")
 
     # Generate synthetic data.
     pyro.set_rng_seed(args.seed)
@@ -86,7 +87,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.9.1")
     parser = argparse.ArgumentParser(
         description="Causal Effect Variational Autoencoder"
     )

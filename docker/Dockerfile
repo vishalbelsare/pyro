@@ -1,15 +1,20 @@
-ARG base_img=ubuntu:16.04
+# Copyright Contributors to the Pyro project.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+ARG base_img=ubuntu:24.04
 FROM ${base_img}
 
 # Optional args
-ARG cuda=0
-ARG python_version=2.7
+ARG python_version=3
 ARG pyro_branch=release
+ARG pytorch_whl=cpu
 ARG pytorch_branch=release
 ARG uid=1000
 ARG gid=1000
 ARG ostype=Linux
 ARG pyro_git_url=https://github.com/pyro-ppl/pyro.git
+ARG trust_hosts=no
 
 # Configurable settings
 ENV USER_NAME pyromancer
@@ -22,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
          build-essential \
          cmake \
          git \
-         curl \
+         wget \
          ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
@@ -33,11 +38,21 @@ RUN bash -c 'if [ ${ostype} == Linux ]; then groupadd -r --gid ${gid} ${USER_NAM
 USER ${USER_NAME}
 
 # Install conda
-RUN curl -o ~/miniconda.sh -O \
-    https://repo.continuum.io/miniconda/Miniconda${python_version%%.*}-latest-Linux-x86_64.sh && \
+RUN if [ ${trust_hosts} = yes ] ; then WGET_ARGS="--no-check-certificate" ; fi && \
+    wget ${WGET_ARGS} -O ~/miniconda.sh \
+    https://repo.anaconda.com/miniconda/Miniconda${python_version%%.*}-latest-Linux-x86_64.sh && \
     bash ~/miniconda.sh -f -b -p ${CONDA_DIR} && \
-    rm ~/miniconda.sh && \
-    conda install python=${python_version}
+    rm ~/miniconda.sh
+
+# Trust conda and pip hosts if needed
+RUN if [ ${trust_hosts} = yes ] ; \
+    then \
+        pip config set global.trusted-host "pypi.org files.pythonhosted.org download.pytorch.org" && \
+        conda config --set ssl_verify False ; \
+    fi
+
+# Update python version
+RUN conda install python=${python_version}
 
 # Move to home directory; and copy the install script
 WORKDIR ${WORK_DIR}

@@ -25,14 +25,10 @@ from pyro.primitives import (
 )
 from pyro.util import set_rng_seed
 
-# After changing this, run scripts/update_version.py
-version_prefix = "1.8.0"
+from . import settings
 
-# Get the __version__ string from the auto-generated _version.py file, if exists.
-try:
-    from pyro._version import __version__  # type: ignore
-except ImportError:
-    __version__ = version_prefix
+# After changing this, run scripts/update_version.py
+__version__ = "1.9.1"  # used by pyproject.toml
 
 __all__ = [
     "__version__",
@@ -58,6 +54,7 @@ __all__ = [
     "render_model",
     "sample",
     "set_rng_seed",
+    "settings",
     "subsample",
     "validation_enabled",
 ]

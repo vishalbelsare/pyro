@@ -15,7 +15,6 @@ from tests.common import assert_equal
 
 class HMMSamplingTestCase(TestCase):
     def setUp(self):
-
         # simple Gaussian-emission HMM
         def model():
             p_latent = pyro.param("p1", torch.tensor([[0.7], [0.3]]))
@@ -24,7 +23,6 @@ class HMMSamplingTestCase(TestCase):
             latents = [torch.ones(1, 1)]
             observes = []
             for t in range(self.model_steps):
-
                 latents.append(
                     pyro.sample(
                         "latent_{}".format(str(t)),
@@ -52,7 +50,6 @@ class HMMSamplingTestCase(TestCase):
 
 class NormalNormalSamplingTestCase(TestCase):
     def setUp(self):
-
         pyro.clear_param_store()
 
         def model():
@@ -81,9 +78,13 @@ class ImportanceTest(NormalNormalSamplingTestCase):
             self.model, guide=self.guide, num_samples=5000
         ).run()
         marginal = EmpiricalMarginal(posterior)
-        assert_equal(0, torch.norm(marginal.mean - self.loc_mean).item(), prec=0.01)
         assert_equal(
-            0, torch.norm(marginal.variance.sqrt() - self.loc_stddev).item(), prec=0.1
+            0, torch.linalg.norm(marginal.mean - self.loc_mean).item(), prec=0.01
+        )
+        assert_equal(
+            0,
+            torch.linalg.norm(marginal.variance.sqrt() - self.loc_stddev).item(),
+            prec=0.1,
         )
 
     @pytest.mark.init(rng_seed=0)
@@ -92,7 +93,11 @@ class ImportanceTest(NormalNormalSamplingTestCase):
             self.model, guide=None, num_samples=10000
         ).run()
         marginal = EmpiricalMarginal(posterior)
-        assert_equal(0, torch.norm(marginal.mean - self.loc_mean).item(), prec=0.01)
         assert_equal(
-            0, torch.norm(marginal.variance.sqrt() - self.loc_stddev).item(), prec=0.1
+            0, torch.linalg.norm(marginal.mean - self.loc_mean).item(), prec=0.01
+        )
+        assert_equal(
+            0,
+            torch.linalg.norm(marginal.variance.sqrt() - self.loc_stddev).item(),
+            prec=0.1,
         )

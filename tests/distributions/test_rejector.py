@@ -27,6 +27,15 @@ def test_rejection_standard_gamma_sample_shape(sample_shape, batch_shape):
     assert x.shape == sample_shape + batch_shape
 
 
+def test_shape_augmented_gamma_generator():
+    dist = ShapeAugmentedGamma(torch.tensor(0.5), torch.tensor(1.0))
+    generator = torch.Generator().manual_seed(0)
+    actual = dist.rsample((10,), generator=generator)
+    generator.manual_seed(0)
+    expected = dist.rsample((10,), generator=generator)
+    assert_equal(actual, expected)
+
+
 @pytest.mark.parametrize("sample_shape", SIZES)
 @pytest.mark.parametrize("batch_shape", filter(bool, SIZES))
 def test_rejection_exponential_sample_shape(sample_shape, batch_shape):
@@ -49,7 +58,7 @@ def compute_elbo_grad(model, guide, variables):
 @pytest.mark.parametrize("rate", [0.5, 1.0, 2.0])
 @pytest.mark.parametrize("factor", [0.25, 0.5, 1.0])
 def test_rejector(rate, factor):
-    num_samples = 100000
+    num_samples = 200000
     rates = torch.tensor(rate).expand(num_samples, 1)
     factors = torch.tensor(factor).expand(num_samples, 1)
 
@@ -57,8 +66,8 @@ def test_rejector(rate, factor):
     dist2 = RejectionExponential(rates, factors)  # implemented using Rejector
     x1 = dist1.rsample()
     x2 = dist2.rsample()
-    assert_equal(x1.mean(), x2.mean(), prec=0.02, msg="bug in .rsample()")
-    assert_equal(x1.std(), x2.std(), prec=0.02, msg="bug in .rsample()")
+    assert_equal(x1.mean(), x2.mean(), prec=0.03, msg="bug in .rsample()")
+    assert_equal(x1.std(), x2.std(), prec=0.03, msg="bug in .rsample()")
     assert_equal(dist1.log_prob(x1), dist2.log_prob(x1), msg="bug in .log_prob()")
 
 

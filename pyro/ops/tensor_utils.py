@@ -6,7 +6,16 @@ import math
 import torch
 from torch.fft import irfft, rfft
 
+from .. import settings
+
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
+CHOLESKY_RELATIVE_JITTER = 4.0  # in units of finfo.eps
+
+
+@settings.register("cholesky_relative_jitter", __name__, "CHOLESKY_RELATIVE_JITTER")
+def _validate_jitter(value):
+    assert isinstance(value, (float, int))
+    assert 0 <= value
 
 
 def as_complex(x):
@@ -251,9 +260,9 @@ def repeated_matmul(M, n):
     :param int n: The order of the largest product :math:`M^n`
     :returns torch.Tensor: A batch of square tensors of shape (n, ..., N, N)
     """
-    assert M.size(-1) == M.size(
-        -2
-    ), "Input tensors must satisfy M.size(-1) == M.size(-2)."
+    assert M.size(-1) == M.size(-2), (
+        "Input tensors must satisfy M.size(-1) == M.size(-2)."
+    )
     assert n > 0, "argument n to repeated_matmul must be 1 or larger"
 
     doubling_rounds = 0 if n <= 2 else math.ceil(math.log(n, 2)) - 1
@@ -393,9 +402,19 @@ def inverse_haar_transform(x):
     return x
 
 
-def cholesky(x):
+def safe_cholesky(x):
     if x.size(-1) == 1:
+        if CHOLESKY_RELATIVE_JITTER:
+            x = x.clamp(min=torch.finfo(x.dtype).tiny)
         return x.sqrt()
+
+    if CHOLESKY_RELATIVE_JITTER:
+        # Add adaptive jitter.
+        x = x.clone()
+        x_max = x.data.abs().max(-1).values
+        jitter = CHOLESKY_RELATIVE_JITTER * torch.finfo(x.dtype).eps * x_max
+        x.data.diagonal(dim1=-1, dim2=-2).add_(jitter)
+
     return torch.linalg.cholesky(x)
 
 
@@ -420,15 +439,18 @@ def matvecmul(x, y):
 def triangular_solve(x, y, upper=False, transpose=False):
     if y.size(-1) == 1:
         return x / y
-    return x.triangular_solve(y, upper=upper, transpose=transpose).solution
+    if transpose:
+        y = y.transpose(-1, -2)
+        upper = not upper
+    return torch.linalg.solve_triangular(y, x, upper=upper)
 
 
 def precision_to_scale_tril(P):
     Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(
-        torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), L_inv, upper=False
-    )[0]
+    L = torch.linalg.solve_triangular(
+        L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False
+    )
     return L
 
 
@@ -448,3 +470,35 @@ def safe_normalize(x, *, p=2):
     x = x / norm.clamp(min=torch.finfo(x.dtype).tiny)
     x.data[..., 0][x.data.eq(0).all(dim=-1)] = 1  # Avoid the singularity.
     return x
+
+
+def broadcast_tensors_without_dim(tensors, dim):
+    """
+    Broadcast tensors to the same shape without changing the size of
+    dimension ``dim`` of each tensor.
+
+    The broadcasting is performed in the same way as done in
+    :func:`torch.broadcast_tensors`, while leaving the size of
+    dimension ``dim`` of each tensor unchanged.
+
+    The returned tensors can be concatenated along the dimension ``dim``.
+
+    :param list tensors: List of `torch.Tensor` objects.
+    :param int dim: Dimension to leave out of broadcasting.
+    :returns: List of `torch.Tensor` objects.
+    """
+    if dim >= 0:
+        shape_len = len(tensors[0].shape)
+        for tensor in tensors[1:]:
+            if len(tensor.shape) != shape_len:
+                raise ValueError(
+                    "Dimension dim must be negative for different dimension tensors"
+                )
+    shapes = [list(tensor.shape) for tensor in tensors]
+    for shape in shapes:
+        shape[dim] = 1
+    shape = torch.broadcast_shapes(*shapes)
+    shapes = [list(shape) for count in range(len(tensors))]
+    for shape, tensor in zip(shapes, tensors):
+        shape[dim] = tensor.shape[dim]
+    return [tensor.expand(shape) for shape, tensor in zip(shapes, tensors)]

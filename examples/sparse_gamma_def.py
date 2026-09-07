@@ -31,7 +31,7 @@ from pyro.distributions import Gamma, Normal, Poisson
 from pyro.infer import SVI, TraceMeanField_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, init_to_feasible
 
-torch.set_default_tensor_type("torch.FloatTensor")
+torch.set_default_dtype(torch.float32)
 pyro.util.set_rng_seed(0)
 
 
@@ -216,7 +216,7 @@ def main(args):
                 raise
             pass
         wget.download(
-            "https://d2hg8soec8ck9v.cloudfront.net/datasets/faces_training.csv",
+            "https://github.com/pyro-ppl/datasets/blob/master/faces_training.csv?raw=true",
             dataset_path,
         )
     data = torch.tensor(np.loadtxt(dataset_path, delimiter=",")).float()
@@ -269,7 +269,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.9.1")
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument(

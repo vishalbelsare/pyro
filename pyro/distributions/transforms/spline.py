@@ -191,9 +191,7 @@ def _monotonic_rational_spline(
                 inputs <= yc
             ).float() + (
                 (wc - input_lambdas * wb) * inputs + input_lambdas * wb * yb - wc * yc
-            ) * (
-                inputs > yc
-            ).float()
+            ) * (inputs > yc).float()
 
             denominator = ((wc - wa) * inputs + wa * ya - wc * yc) * (
                 inputs <= yc
@@ -254,6 +252,8 @@ def _monotonic_rational_spline(
             c = -input_delta * (inputs - input_cumheights)
 
             discriminant = b.pow(2) - 4 * a * c
+            # Make sure outside_interval input can be reversed as identity.
+            discriminant = discriminant.masked_fill(outside_interval_mask, 0)
             assert (discriminant >= 0).all()
 
             root = (2 * c) / (-b - torch.sqrt(discriminant))

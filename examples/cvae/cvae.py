@@ -70,7 +70,6 @@ class CVAE(nn.Module):
         pyro.module("generation_net", self)
         batch_size = xs.shape[0]
         with pyro.plate("data"):
-
             # Prior network uses the baseline predictions as initial guess.
             # This is the generative process with recurrent connection
             with torch.no_grad():
@@ -130,7 +129,6 @@ def train(
     model_path,
     pre_trained_baseline_net,
 ):
-
     # clear param store
     pyro.clear_param_store()
 
@@ -186,6 +184,6 @@ def train(
             break
 
     # Save model weights
-    cvae_net.load_state_dict(torch.load(model_path))
+    cvae_net.load_state_dict(torch.load(model_path, weights_only=False))
     cvae_net.eval()
     return cvae_net

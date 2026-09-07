@@ -89,17 +89,17 @@ class PyroOptim:
         self.pt_optim_constructor = optim_constructor
 
         # must be callable or dict
-        assert callable(optim_args) or isinstance(
-            optim_args, dict
-        ), "optim_args must be function that returns defaults or a defaults dictionary"
+        assert callable(optim_args) or isinstance(optim_args, dict), (
+            "optim_args must be function that returns defaults or a defaults dictionary"
+        )
 
         if clip_args is None:
             clip_args = {}
 
         # must be callable or dict
-        assert callable(clip_args) or isinstance(
-            clip_args, dict
-        ), "clip_args must be function that returns defaults or a defaults dictionary"
+        assert callable(clip_args) or isinstance(clip_args, dict), (
+            "clip_args must be function that returns defaults or a defaults dictionary"
+        )
 
         # hold our args to be called/used
         self.pt_optim_args = optim_args
@@ -138,10 +138,16 @@ class PyroOptim:
             if self.grad_clip[p] is not None:
                 self.grad_clip[p](p)
 
-            if isinstance(
-                self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler
-            ) or isinstance(
-                self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau
+            if (
+                hasattr(torch.optim.lr_scheduler, "_LRScheduler")
+                and isinstance(
+                    self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler
+                )
+                or hasattr(torch.optim.lr_scheduler, "LRScheduler")
+                and isinstance(self.optim_objs[p], torch.optim.lr_scheduler.LRScheduler)
+                or isinstance(
+                    self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau
+                )
             ):
                 # if optim object was a scheduler, perform an optimizer step
                 self.optim_objs[p].optimizer.step(*args, **kwargs)
@@ -186,7 +192,9 @@ class PyroOptim:
         Load optimizer state from disk
         """
         with open(filename, "rb") as input_file:
-            state = torch.load(input_file, map_location=map_location)
+            state = torch.load(
+                input_file, map_location=map_location, weights_only=False
+            )
         self.set_state(state)
 
     def _get_optim(self, param: Union[Iterable[Tensor], Iterable[Dict[Any, Any]]]):
@@ -209,9 +217,9 @@ class PyroOptim:
                 opt_dict = self.pt_optim_args(module_name, stripped_param_name)
 
             # must be dictionary
-            assert isinstance(
-                opt_dict, dict
-            ), "per-param optim arg must return defaults dictionary"
+            assert isinstance(opt_dict, dict), (
+                "per-param optim arg must return defaults dictionary"
+            )
             return opt_dict
         else:
             return self.pt_optim_args
@@ -231,7 +239,6 @@ class PyroOptim:
         # if we were passed a fct, we call fct with param info
         # arguments are (module name, param name) e.g. ('mymodule', 'bias')
         if callable(self.pt_clip_args):
-
             # get param name
             param_name = pyro.get_param_store().param_name(param)
             module_name = module_from_param_with_module_name(param_name)
@@ -241,9 +248,9 @@ class PyroOptim:
             clip_dict = self.pt_clip_args(module_name, stripped_param_name)
 
             # must be dictionary
-            assert isinstance(
-                clip_dict, dict
-            ), "per-param clip arg must return defaults dictionary"
+            assert isinstance(clip_dict, dict), (
+                "per-param clip arg must return defaults dictionary"
+            )
             return clip_dict
         else:
             return self.pt_clip_args

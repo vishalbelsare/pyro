@@ -64,7 +64,6 @@ def generate_data(small_test, include_stop, device):
 
 
 def main(args):
-
     pyro.set_rng_seed(args.rng_seed)
 
     # Load dataset.
@@ -93,9 +92,7 @@ def main(args):
         indices = torch.randperm(sum(data_lengths), device=device).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length) : offset])
-            for offset, length in zip(
-                torch._utils._accumulate(data_lengths), data_lengths
-            )
+            for offset, length in zip(np.cumsum(data_lengths), data_lengths)
         ]
     else:
         dataset_train = dataset
@@ -317,9 +314,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    torch.set_default_dtype(torch.float64)
     if args.cuda:
-        torch.set_default_tensor_type(torch.cuda.DoubleTensor)
-    else:
-        torch.set_default_dtype(torch.float64)
+        torch.set_default_device("cuda")
 
     main(args)

@@ -5,6 +5,7 @@ import itertools
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
+from operator import attrgetter
 from types import SimpleNamespace
 from typing import Callable, Dict, Optional, Set, Tuple, Union
 
@@ -17,12 +18,13 @@ import pyro.poutine as poutine
 from pyro.distributions import constraints
 from pyro.infer.inspect import get_dependencies, is_sample_site
 from pyro.nn.module import PyroModule, PyroParam
+from pyro.ops.linalg import ignore_torch_deprecation_warnings
 from pyro.poutine.runtime import am_i_wrapped, get_plates
 from pyro.poutine.util import site_is_subsample
 
 from .guides import AutoGuide
 from .initialization import InitMessenger, init_to_feasible
-from .utils import deep_getattr, deep_setattr, helpful_support_errors
+from .utils import deep_setattr, helpful_support_errors
 
 
 # Helper to dispatch to concrete subclasses of AutoGaussian, e.g.
@@ -286,8 +288,8 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         for name, site in self._factors.items():
             if site["is_observed"]:
                 continue
-            loc = deep_getattr(self.locs, name)
-            scale = deep_getattr(self.scales, name)
+            loc = attrgetter(name)(self.locs)
+            scale = attrgetter(name)(self.scales)
             unconstrained = aux_values[name] * scale + loc
 
             # Transform to constrained space.
@@ -334,7 +336,7 @@ class AutoGaussianDense(AutoGaussian):
         # Create sparse -> dense precision scatter indices.
         self._dense_scatter = {}
         for d, site in self._factors.items():
-            prec_sqrt_shape = deep_getattr(self.prec_sqrts, d).shape
+            prec_sqrt_shape = attrgetter(d)(self.prec_sqrts).shape
             info_vec_shape = prec_sqrt_shape[:-1]
             precision_shape = prec_sqrt_shape[:-1] + prec_sqrt_shape[-2:-1]
             index1 = torch.zeros(info_vec_shape, dtype=torch.long)
@@ -374,9 +376,9 @@ class AutoGaussianDense(AutoGaussian):
                 u_stop = u_start + u_index.size(-1)
                 v_start = local_offsets[v]
                 v_stop = v_start + v_index.size(-1)
-                index2[
-                    ..., u_start:u_stop, v_start:v_stop
-                ] = self._dense_size * u_index.unsqueeze(-1) + v_index.unsqueeze(-2)
+                index2[..., u_start:u_stop, v_start:v_stop] = (
+                    self._dense_size * u_index.unsqueeze(-1) + v_index.unsqueeze(-2)
+                )
 
             self._dense_scatter[d] = index1.reshape(-1), index2.reshape(-1)
 
@@ -424,8 +426,8 @@ class AutoGaussianDense(AutoGaussian):
         flat_info_vec = torch.zeros(self._dense_size)
         flat_precision = torch.zeros(self._dense_size**2)
         for d, (index1, index2) in self._dense_scatter.items():
-            white_vec = deep_getattr(self.white_vecs, d)
-            prec_sqrt = deep_getattr(self.prec_sqrts, d)
+            white_vec = attrgetter(d)(self.white_vecs)
+            prec_sqrt = attrgetter(d)(self.prec_sqrts)
             info_vec = (prec_sqrt @ white_vec[..., None])[..., 0]
             precision = prec_sqrt @ prec_sqrt.transpose(-1, -2)
             flat_info_vec.scatter_add_(0, index1, info_vec.reshape(-1))
@@ -504,8 +506,8 @@ class AutoGaussianFunsor(AutoGaussian):
             batch_shape = torch.Size(
                 p.size for p in sorted(self._plates[d], key=lambda p: p.dim)
             )
-            white_vec = deep_getattr(self.white_vecs, d)
-            prec_sqrt = deep_getattr(self.prec_sqrts, d)
+            white_vec = attrgetter(d)(self.white_vecs)
+            prec_sqrt = attrgetter(d)(self.prec_sqrts)
             factors[d] = funsor.gaussian.Gaussian(
                 white_vec=white_vec.reshape(batch_shape + white_vec.shape[-1:]),
                 prec_sqrt=prec_sqrt.reshape(batch_shape + prec_sqrt.shape[-2:]),
@@ -553,12 +555,13 @@ def _precision_to_scale_tril(P):
     # Ref: https://nbviewer.jupyter.org/gist/fehiepsi/5ef8e09e61604f10607380467eb82006#Precision-to-scale_tril
     Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(
-        torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), L_inv, upper=False
-    )[0]
+    L = torch.linalg.solve_triangular(
+        L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False
+    )
     return L
 
 
+@ignore_torch_deprecation_warnings()
 def _try_possibly_intractable(fn, *args, **kwargs):
     # Convert ValueError into NotImplementedError.
     try:

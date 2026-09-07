@@ -12,6 +12,7 @@ from pyro.ops.stats import (
     autocovariance,
     crps_empirical,
     effective_sample_size,
+    energy_score_empirical,
     fit_generalized_pareto,
     gelman_rubin,
     hpdi,
@@ -20,6 +21,7 @@ from pyro.ops.stats import (
     resample,
     split_gelman_rubin,
     waic,
+    weighed_quantile,
 )
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
@@ -55,6 +57,25 @@ def test_quantile():
     )
     assert_equal(quantile(y, probs=0.2), torch.tensor(0.2), prec=0.02)
     assert_equal(quantile(z, probs=0.8413), torch.tensor(1.0), prec=0.02)
+
+
+@pytest.mark.init(rng_seed=3)
+def test_weighed_quantile():
+    # Fixed values test
+    input = torch.tensor([[10.0, 50.0, 40.0], [20.0, 30.0, 0.0]])
+    probs = [0.2, 0.8]
+    log_weights = torch.tensor([0.4, 0.5, 0.1]).log()
+    result = weighed_quantile(input, probs, log_weights, -1)
+    assert_equal(result, torch.tensor([[40.4, 47.6], [9.0, 26.4]]))
+
+    # Random values test
+    dist = torch.distributions.normal.Normal(0, 1)
+    input = dist.sample((100000,))
+    probs = [0.1, 0.7, 0.95]
+    log_weights = dist.log_prob(input)
+    result = weighed_quantile(input, probs, log_weights)
+    result_dist = torch.distributions.normal.Normal(0, torch.tensor(0.5).sqrt())
+    assert_equal(result, result_dist.icdf(torch.tensor(probs)), prec=0.01)
 
 
 def test_pi():
@@ -105,13 +126,32 @@ def test_statistics_A_ok_with_sample_shape(statistics, sample_shape):
 
 def test_autocorrelation():
     x = torch.arange(10.0)
-    with xfail_if_not_implemented():
-        actual = autocorrelation(x)
+    actual = autocorrelation(x)
     assert_equal(
         actual,
         torch.tensor([1, 0.78, 0.52, 0.21, -0.13, -0.52, -0.94, -1.4, -1.91, -2.45]),
         prec=0.01,
     )
+
+
+def test_autocorrelation_trivial():
+    x = torch.zeros(10)
+    actual = autocorrelation(x)
+    assert_equal(actual, torch.ones(10), prec=0.01)
+
+
+def test_autocorrelation_vectorized():
+    # make a mostly noisy x with a couple constant series
+    x = torch.randn(3, 4, 5)
+    x[1, 2] = 0
+    x[2, 3] = 1
+
+    actual = autocorrelation(x, dim=-1)
+    expected = torch.tensor([[autocorrelation(xij).tolist() for xij in xi] for xi in x])
+    assert_equal(actual, expected)
+
+    assert (actual[1, 2] == 1).all()
+    assert (actual[2, 3] == 1).all()
 
 
 def test_autocovariance():
@@ -274,7 +314,7 @@ def test_fit_generalized_pareto(k, sigma, n_samples=5000):
 
 @pytest.mark.parametrize("event_shape", [(), (4,), (3, 2)])
 @pytest.mark.parametrize("num_samples", [1, 2, 3, 4, 10])
-def test_crps_empirical(num_samples, event_shape):
+def test_crps_univariate_energy_score_empirical(num_samples, event_shape):
     truth = torch.randn(event_shape)
     pred = truth + 0.1 * torch.randn((num_samples,) + event_shape)
 
@@ -284,4 +324,52 @@ def test_crps_empirical(num_samples, event_shape):
     expected = (pred - truth).abs().mean(0) - 0.5 * (
         pred - pred.unsqueeze(1)
     ).abs().mean([0, 1])
+    assert_close(actual, expected)
+
+    expected = energy_score_empirical(
+        pred[..., None].swapaxes(0, -1)[0, ..., None], truth[..., None]
+    )
+    assert_close(actual, expected)
+
+
+@pytest.mark.parametrize("sample_dim", [3, 10, 30, 100])
+def test_multivariate_energy_score(sample_dim, num_samples=10000):
+    pred_uncorrelated = torch.randn(num_samples, sample_dim)
+
+    pred = torch.randn(num_samples, 1)
+    pred = pred.expand(pred_uncorrelated.shape)
+
+    truth = torch.randn(num_samples, 1)
+    truth = truth.expand(pred_uncorrelated.shape)
+
+    energy_score = energy_score_empirical(pred, truth).mean()
+    energy_score_uncorrelated = energy_score_empirical(pred_uncorrelated, truth).mean()
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        from scipy.stats import chi
+
+    assert_close(
+        energy_score,
+        torch.tensor(0.5 * chi(1).mean() * (2 * sample_dim) ** 0.5),
+        rtol=0.02,
+    )
+    assert energy_score * 1.02 < energy_score_uncorrelated
+
+
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("sample_dim", [30, 100])
+@pytest.mark.parametrize(
+    "num_samples, pred_batch_size", [(100, 10), (100, 30), (100, 100), (100, 200)]
+)
+def test_energy_score_empirical_batched_calculation(
+    batch_shape, sample_dim, num_samples, pred_batch_size
+):
+    # Generate data
+    truth = torch.randn(batch_shape + (sample_dim,))
+    pred = torch.randn(batch_shape + (num_samples, sample_dim))
+    # Do batched and regular calculation
+    expected = energy_score_empirical(pred, truth)
+    actual = energy_score_empirical(pred, truth, pred_batch_size=pred_batch_size)
+    # Check accuracy
     assert_close(actual, expected)

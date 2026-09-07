@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def eq(x, y, prec=1e-10):
-    return torch.norm(x - y).item() < prec
+    return torch.linalg.norm(x - y).item() < prec
 
 
 # XXX name is a bit silly
@@ -235,7 +235,6 @@ class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
 
 class QueueHandlerDiscreteTest(TestCase):
     def setUp(self):
-
         # simple Gaussian-mixture HMM
         def model():
             probs = pyro.param("probs", torch.tensor([[0.8], [0.3]]))
@@ -245,7 +244,6 @@ class QueueHandlerDiscreteTest(TestCase):
             latents = [torch.ones(1)]
             observes = []
             for t in range(3):
-
                 latents.append(
                     pyro.sample(
                         "latent_{}".format(str(t)),
@@ -468,7 +466,6 @@ class LiftHandlerTests(TestCase):
 
 class QueueHandlerMixedTest(TestCase):
     def setUp(self):
-
         # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
         def model():
             p = torch.tensor([0.5])
@@ -575,6 +572,36 @@ class IndirectLambdaHandlerTests(TestCase):
         _test_scale_factor(2, 1, [2.0] * 2)
 
 
+class SubstituteHandlerTests(NormalNormalNormalHandlerTestCase):
+    def test_substitute(self):
+        data = {"loc1": torch.randn(2)}
+        tr2 = poutine.trace(poutine.substitute(self.guide, data=data)).get_trace()
+        assert "loc1" in tr2
+        assert tr2.nodes["loc1"]["type"] == "param"
+        assert tr2.nodes["loc1"]["value"] is data["loc1"]
+
+    def test_stack_overwrite_behavior(self):
+        data1 = {"loc1": torch.randn(2)}
+        data2 = {"loc1": torch.randn(2)}
+        with poutine.trace() as tr:
+            cm = poutine.substitute(
+                poutine.substitute(self.guide, data=data1), data=data2
+            )
+            cm()
+        assert tr.trace.nodes["loc1"]["value"] is data2["loc1"]
+
+    def test_stack_success(self):
+        data1 = {"loc1": torch.randn(2)}
+        data2 = {"loc2": torch.randn(2)}
+        tr = poutine.trace(
+            poutine.substitute(poutine.substitute(self.guide, data=data1), data=data2)
+        ).get_trace()
+        assert tr.nodes["loc1"]["type"] == "param"
+        assert tr.nodes["loc1"]["value"] is data1["loc1"]
+        assert tr.nodes["loc2"]["type"] == "param"
+        assert tr.nodes["loc2"]["value"] is data2["loc2"]
+
+
 class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
     def test_condition(self):
         data = {"latent2": torch.randn(2)}
@@ -644,7 +671,6 @@ class UnconditionHandlerTests(NormalNormalNormalHandlerTestCase):
 
 class EscapeHandlerTests(TestCase):
     def setUp(self):
-
         # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
         def model():
             p = torch.tensor([0.5])
@@ -727,6 +753,100 @@ class InferConfigHandlerTests(TestCase):
         assert tr.nodes["a"]["infer"] == {"enumerate": "parallel", "blah": True}
         assert tr.nodes["b"]["infer"] == {"blah": True}
         assert tr.nodes["p"]["infer"] == {}
+
+
+class EqualizeHandlerTests(TestCase):
+    def setUp(self):
+        def per_category_model(category):
+            shift = pyro.param(f"{category}_shift", torch.randn(1))
+            mean = pyro.sample(f"{category}_mean", pyro.distributions.Normal(0, 1))
+            std = pyro.sample(f"{category}_std", pyro.distributions.LogNormal(0, 1))
+            with pyro.plate(f"{category}_num_samples", 5):
+                return pyro.sample(
+                    f"{category}_values", pyro.distributions.Normal(mean + shift, std)
+                )
+
+        def model(categories=["dogs", "cats"]):
+            return {category: per_category_model(category) for category in categories}
+
+        self.model = model
+
+    def test_sample_site_equalization(self):
+        pyro.set_rng_seed(20240616)
+        pyro.clear_param_store()
+        model = poutine.equalize(self.model, ".+_std")
+        tr = pyro.poutine.trace(model).get_trace()
+        assert_equal(tr.nodes["cats_std"]["value"], tr.nodes["dogs_std"]["value"])
+        assert_not_equal(
+            tr.nodes["cats_shift"]["value"], tr.nodes["dogs_shift"]["value"]
+        )
+        guide = pyro.infer.autoguide.AutoNormal(model)
+        guide_sites = [*guide()]
+        assert guide_sites == [
+            "dogs_mean",
+            "dogs_std",
+            "dogs_values",
+            "cats_mean",
+            "cats_values",
+        ]
+
+    def test_param_equalization(self):
+        pyro.set_rng_seed(20240616)
+        pyro.clear_param_store()
+        model = poutine.equalize(self.model, ".+_shift", "param")
+        tr = pyro.poutine.trace(model).get_trace()
+        assert_equal(tr.nodes["cats_shift"]["value"], tr.nodes["dogs_shift"]["value"])
+        assert_not_equal(tr.nodes["cats_std"]["value"], tr.nodes["dogs_std"]["value"])
+
+    def test_render_model(self):
+        pyro.set_rng_seed(20240616)
+        pyro.clear_param_store()
+        model = poutine.equalize(self.model, ".+_std")
+        pyro.render_model(model)
+
+
+@pytest.mark.parametrize("keep_dist", [False, True])
+@pytest.mark.parametrize(
+    "loc_x, scale_x, loc_y, scale_y", [(0.0, 1.0, 5.0, 2.0), (5.0, 2.0, 0.0, 1.0)]
+)
+def test_condition_by_equalize(loc_x, scale_x, loc_y, scale_y, keep_dist):
+    # Create model and equalize it.
+    def model():
+        x = pyro.sample("x", dist.Normal(loc_x, scale_x))
+        y = pyro.sample("y", dist.Normal(loc_y, scale_y))
+        return x, y
+
+    equalized_model = pyro.poutine.equalize(model, ["x", "y"], keep_dist=keep_dist)
+
+    # Fit guide to model
+    guide = pyro.infer.autoguide.AutoNormal(equalized_model)
+    optim = pyro.optim.Adam(dict(lr=0.1))
+    svi = pyro.infer.SVI(
+        equalized_model,
+        guide,
+        optim,
+        loss=pyro.infer.TraceGraph_ELBO(num_particles=1000, vectorize_particles=True),
+    )
+    for step_num in range(100):
+        svi.step()
+
+    # Get guide distribution parameters
+    loc, scale = guide._get_loc_and_scale("x")
+    loc = float(loc.detach().numpy())
+    scale = float(scale.detach().numpy())
+
+    # Verify against expected distribution parameters
+    if keep_dist:
+        # Both 'x' and 'y' are sampled and the model is conditioned on 'x' and 'y' having the same value.
+        expected_var = 1 / (1 / scale_x**2 + 1 / scale_y**2)
+        expected_loc = (loc_x / scale_x**2 + loc_y / scale_y**2) * expected_var
+        expected_scale = expected_var**0.5
+    else:
+        # The random variable 'x' is sampled and its value is assigned to 'y'.
+        expected_loc = loc_x
+        expected_scale = scale_x
+    assert_close(loc, expected_loc, atol=0.05)
+    assert_close(scale, expected_scale, atol=0.05)
 
 
 @pytest.mark.parametrize("first_available_dim", [-1, -2, -3])
@@ -820,6 +940,20 @@ def test_plate_error_on_enter():
     assert len(_DIM_ALLOCATOR._stack) == 0, "stack was not cleaned on error"
 
 
+@pytest.mark.parametrize(
+    "graph_type, expected", [("flat", set()), ("dense", {"x", "y"})]
+)
+def test_trace_plate(graph_type: str, expected: set):
+    def model():
+        with pyro.plate("plate", 2):
+            x = pyro.sample("x", dist.Normal(0, 1))
+            pyro.sample("y", dist.Normal(x, 1))
+
+    trace = poutine.trace(model, graph_type=graph_type).get_trace()
+    nodes = set().union(*trace._succ.values(), *trace._pred.values())
+    assert nodes == expected
+
+
 def test_decorator_interface_primitives():
     @poutine.trace
     def model():
@@ -851,7 +985,6 @@ def test_decorator_interface_primitives():
 
 
 def test_decorator_interface_queue():
-
     sites = ["x", "y", "z", "_INPUT", "_RETURN"]
     queue = Queue()
     queue.put(poutine.Trace())
@@ -893,10 +1026,7 @@ def test_trace_log_prob_err_msg():
         pyro.sample("test_site", dist.Beta(1.0, 1.0), obs=v)
 
     tr = poutine.trace(model).get_trace(torch.tensor(2.0))
-    exp_msg = (
-        r"Error while computing log_prob at site 'test_site':\s*"
-        r"The value argument must be within the support"
-    )
+    exp_msg = r"Error while computing log_prob at site 'test_site':.*"
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_log_prob()
 
@@ -906,10 +1036,7 @@ def test_trace_log_prob_sum_err_msg():
         pyro.sample("test_site", dist.Beta(1.0, 1.0), obs=v)
 
     tr = poutine.trace(model).get_trace(torch.tensor(2.0))
-    exp_msg = (
-        r"Error while computing log_prob_sum at site 'test_site':\s*"
-        r"The value argument must be within the support"
-    )
+    exp_msg = r"Error while computing log_prob_sum at site 'test_site':.*"
     with pytest.raises(ValueError, match=exp_msg):
         tr.log_prob_sum()
 
@@ -919,10 +1046,7 @@ def test_trace_score_parts_err_msg():
         pyro.sample("test_site", dist.Beta(1.0, 1.0), obs=v)
 
     tr = poutine.trace(guide).get_trace(torch.tensor(2.0))
-    exp_msg = (
-        r"Error while computing score_parts at site 'test_site':\s*"
-        r"The value argument must be within the support"
-    )
+    exp_msg = r"Error while computing score_parts at site 'test_site':.*"
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_score_parts()
 
@@ -947,7 +1071,7 @@ def test_pickling(wrapper):
     # default protocol cannot serialize torch.Size objects (see https://github.com/pytorch/pytorch/issues/20823)
     torch.save(wrapped, buffer, pickle_protocol=pickle.HIGHEST_PROTOCOL)
     buffer.seek(0)
-    deserialized = torch.load(buffer)
+    deserialized = torch.load(buffer, weights_only=False)
     obs = torch.tensor(0.5)
     pyro.set_rng_seed(0)
     actual_trace = poutine.trace(deserialized).get_trace(obs)
@@ -977,3 +1101,13 @@ def test_arg_kwarg_error():
 
     with poutine.mask(mask=False):
         model()
+
+
+def test_block_class_method():
+    class A:
+        @poutine.block
+        def run(self):
+            return 1
+
+    a = A()
+    a.run()

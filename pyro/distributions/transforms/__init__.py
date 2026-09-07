@@ -1,16 +1,37 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+# Import * to get the latest upstream transforms.
 from torch.distributions.transforms import *  # noqa F403
 
-# isort: split
+# Additionally try to import explicitly to help mypy static analysis.
+try:
+    from torch.distributions.transforms import (
+        AbsTransform,
+        AffineTransform,
+        CatTransform,
+        ComposeTransform,
+        # CorrCholeskyTransform,  # Use Pyro's version below.
+        CumulativeDistributionTransform,
+        ExpTransform,
+        IndependentTransform,
+        LowerCholeskyTransform,
+        PositiveDefiniteTransform,
+        PowerTransform,
+        ReshapeTransform,
+        SigmoidTransform,
+        SoftmaxTransform,
+        # SoftplusTransform,  # Use Pyro's version below.
+        StackTransform,
+        StickBreakingTransform,
+        TanhTransform,
+        Transform,
+        identity_transform,
+    )
+except ImportError:
+    pass
 
 from torch.distributions import biject_to, transform_to
-from torch.distributions.transforms import (
-    ComposeTransform,
-    ExpTransform,
-    LowerCholeskyTransform,
-)
 from torch.distributions.transforms import __all__ as torch_transforms
 
 from .. import constraints
@@ -32,6 +53,7 @@ from .batchnorm import BatchNorm, batchnorm
 from .block_autoregressive import BlockAutoregressive, block_autoregressive
 from .cholesky import (
     CholeskyTransform,
+    CorrCholeskyTransform,
     CorrLCholeskyTransform,
     CorrMatrixCholeskyTransform,
 )
@@ -69,6 +91,7 @@ from .planar import ConditionalPlanar, Planar, conditional_planar, planar
 from .polynomial import Polynomial, polynomial
 from .power import PositivePowerTransform
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
+from .simplex_to_ordered import SimplexToOrderedTransform
 from .softplus import SoftplusLowerCholeskyTransform, SoftplusTransform
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
 from .spline_autoregressive import (
@@ -90,17 +113,11 @@ def _transform_to_sphere(constraint):
     return Normalize()
 
 
-@biject_to.register(constraints.corr_cholesky)
-@transform_to.register(constraints.corr_cholesky)
-def _transform_to_corr_cholesky(constraint):
-    return CorrLCholeskyTransform()
-
-
 @biject_to.register(constraints.corr_matrix)
 @transform_to.register(constraints.corr_matrix)
 def _transform_to_corr_matrix(constraint):
     return ComposeTransform(
-        [CorrLCholeskyTransform(), CorrMatrixCholeskyTransform().inv]
+        [CorrCholeskyTransform(), CorrMatrixCholeskyTransform().inv]
     )
 
 
@@ -154,12 +171,15 @@ def iterated(repeats, base_fn, *args, **kwargs):
 
 
 __all__ = [
-    "iterated",
+    "AbsTransform",
     "AffineAutoregressive",
     "AffineCoupling",
+    "AffineTransform",
     "BatchNorm",
     "BlockAutoregressive",
+    "CatTransform",
     "CholeskyTransform",
+    "ComposeTransform",
     "ComposeTransformModule",
     "ConditionalAffineAutoregressive",
     "ConditionalAffineCoupling",
@@ -171,15 +191,20 @@ __all__ = [
     "ConditionalRadial",
     "ConditionalSpline",
     "ConditionalSplineAutoregressive",
+    "CorrCholeskyTransform",
     "CorrLCholeskyTransform",
     "CorrMatrixCholeskyTransform",
+    "CumulativeDistributionTransform",
     "DiscreteCosineTransform",
     "ELUTransform",
+    "ExpTransform",
     "GeneralizedChannelPermute",
     "HaarTransform",
     "Householder",
+    "IndependentTransform",
     "LeakyReLUTransform",
     "LowerCholeskyAffine",
+    "LowerCholeskyTransform",
     "MatrixExponential",
     "NeuralAutoregressive",
     "Normalize",
@@ -187,14 +212,24 @@ __all__ = [
     "Permute",
     "Planar",
     "Polynomial",
+    "PositiveDefiniteTransform",
     "PositivePowerTransform",
+    "PowerTransform",
     "Radial",
+    "ReshapeTransform",
+    "SigmoidTransform",
+    "SimplexToOrderedTransform",
+    "SoftmaxTransform",
     "SoftplusLowerCholeskyTransform",
     "SoftplusTransform",
     "Spline",
     "SplineAutoregressive",
     "SplineCoupling",
+    "StackTransform",
+    "StickBreakingTransform",
     "Sylvester",
+    "TanhTransform",
+    "Transform",
     "affine_autoregressive",
     "affine_coupling",
     "batchnorm",
@@ -212,6 +247,8 @@ __all__ = [
     "elu",
     "generalized_channel_permute",
     "householder",
+    "identity_transform",
+    "iterated",
     "leaky_relu",
     "matrix_exponential",
     "neural_autoregressive",
@@ -226,4 +263,5 @@ __all__ = [
 ]
 
 __all__.extend(torch_transforms)
+__all__[:] = sorted(set(__all__))
 del torch_transforms

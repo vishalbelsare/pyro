@@ -9,6 +9,7 @@ This module offers a modified interface for MCMC inference with the following ob
     code that works with different backends.
   - minimal memory consumption with multiprocessing and CUDA.
 """
+
 import copy
 import json
 import logging
@@ -107,13 +108,15 @@ class _Worker:
         self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
         self.log_queue = log_queue
         self.result_queue = result_queue
-        self.default_tensor_type = torch.Tensor().type()
+        self.default_dtype = torch.get_default_dtype()
+        self.default_device = torch.get_default_device()
         self.hook = hook
         self.event = event
 
     def run(self, *args, **kwargs):
         pyro.set_rng_seed(self.rng_seed)
-        torch.set_default_tensor_type(self.default_tensor_type)
+        torch.set_default_dtype(self.default_dtype)
+        torch.set_default_device(self.default_device)
         kwargs = kwargs
         logger = logging.getLogger("pyro.infer.mcmc")
         logger_id = "CHAIN:{}".format(self.chain_id)
@@ -129,7 +132,7 @@ class _Worker:
                 logging_hook,
                 None,
                 *args,
-                **kwargs
+                **kwargs,
             ):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
@@ -227,7 +230,7 @@ class _UnarySampler:
                 hook_w_logging,
                 i if self.num_chains > 1 else None,
                 *args,
-                **kwargs
+                **kwargs,
             ):
                 yield sample, i  # sample, chain_id
             self.kernel.cleanup()

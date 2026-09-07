@@ -22,6 +22,7 @@ Pyro Documentation
    optimization
    poutine
    ops
+   settings
    testing
 
 .. toctree::
@@ -44,6 +45,7 @@ Pyro Documentation
    contrib.randomvariable
    contrib.timeseries
    contrib.tracking
+   contrib.zuko
 
 
 Indices and tables

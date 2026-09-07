@@ -35,7 +35,6 @@ class SineBivariateVonMises(TorchDistribution):
     This distribution is a submodel of the Bivariate von Mises distribution, called the Sine Distribution [2] in
     directional statistics.
 
-
     This distribution is helpful for modeling coupled angles such as torsion angles in peptide chains.
     To infer parameters, use :class:`~pyro.infer.NUTS` or :class:`~pyro.infer.HMC` with priors that
     avoid parameterizations where the distribution becomes bimodal; see note below.
@@ -44,15 +43,19 @@ class SineBivariateVonMises(TorchDistribution):
 
         .. math::
 
-            \frac{\rho}{\kappa_1\kappa_2} \rightarrow 1
+            \frac{\rho^2}{\kappa_1\kappa_2} \rightarrow 1
 
-        because the distribution becomes increasingly bimodal. To avoid bimodality use the `weighted_correlation`
-        parameter with a skew away from one (e.g., Beta(1,3)). The `weighted_correlation` should be in [0,1].
+        because the distribution becomes increasingly bimodal. To avoid inefficient sampling use the
+        `weighted_correlation` parameter with a skew away from one (e.g.,
+        `TransformedDistribution(Beta(5,5), AffineTransform(loc=-1, scale=2))`). The `weighted_correlation`
+        should be in [-1,1].
 
     .. note:: The correlation and weighted_correlation params are mutually exclusive.
 
     .. note:: In the context of :class:`~pyro.infer.SVI`, this distribution can be used as a likelihood but not for
         latent variables.
+
+    .. note:: Normalization remains accurate up to concentrations of 10,000.
 
     ** References: **
       1. Probabilistic model for two dependent circular variables Singh, H., Hnizdo, V., and Demchuck, E. (2002)
@@ -64,8 +67,8 @@ class SineBivariateVonMises(TorchDistribution):
     :param torch.Tensor phi_concentration: concentration of first angle
     :param torch.Tensor psi_concentration: concentration of second angle
     :param torch.Tensor correlation: correlation between the two angles
-    :param torch.Tensor weighted_correlation: set correlation to weigthed_corr * sqrt(phi_conc*psi_conc)
-        to avoid bimodality (see note). The `weightd_correlation` should be in [0,1].
+    :param torch.Tensor weighted_correlation: set correlation to weighted_corr * sqrt(phi_conc*psi_conc)
+        to avoid bimodality (see note). The `weighted_correlation` should be in [-1,1].
     """
 
     arg_constraints = {
@@ -88,16 +91,14 @@ class SineBivariateVonMises(TorchDistribution):
         weighted_correlation=None,
         validate_args=None,
     ):
-
         assert (correlation is None) != (weighted_correlation is None)
 
         if weighted_correlation is not None:
             sqrt_ = (
                 torch.sqrt if isinstance(phi_concentration, torch.Tensor) else math.sqrt
             )
-            correlation = (
-                weighted_correlation * sqrt_(phi_concentration * psi_concentration)
-                + 1e-8
+            correlation = weighted_correlation * sqrt_(
+                phi_concentration * psi_concentration
             )
 
         (
@@ -109,6 +110,16 @@ class SineBivariateVonMises(TorchDistribution):
         ) = broadcast_all(
             phi_loc, psi_loc, phi_concentration, psi_concentration, correlation
         )
+
+        max_conc = torch.maximum(
+            torch.max(phi_concentration), torch.max(psi_concentration)
+        )
+        assrt_hstr = (
+            "Normalization of SineBiviateVonMises is inaccurate for"
+            f"current max concentration ({max_conc} > 10,000)."
+        )
+        assert max_conc <= torch.tensor(10_000.0), assrt_hstr
+
         self.phi_loc = phi_loc
         self.psi_loc = psi_loc
         self.phi_concentration = phi_concentration
@@ -130,17 +141,24 @@ class SineBivariateVonMises(TorchDistribution):
 
     @lazy_property
     def norm_const(self):
-        corr = self.correlation.view(1, -1) + 1e-8
+        corr = self.correlation.view(1, -1)
         conc = torch.stack(
             (self.phi_concentration, self.psi_concentration), dim=-1
         ).view(-1, 2)
         m = torch.arange(50, device=self.phi_loc.device).view(-1, 1)
+        tiny = torch.finfo(corr.dtype).tiny
         fs = (
             SineBivariateVonMises._lbinoms(m.max() + 1).view(-1, 1)
-            + 2 * m * torch.log(corr)
+            + m * torch.log((corr**2).clamp(min=tiny))
             - m * torch.log(4 * torch.prod(conc, dim=-1))
         )
-        fs += log_I1(m.max(), conc, 51).sum(-1)
+        num_I1terms = torch.maximum(
+            torch.tensor(501),
+            torch.max(self.phi_concentration) + torch.max(self.psi_concentration),
+        ).int()
+
+        fs += log_I1(m.max(), conc, num_I1terms).sum(-1)
+
         mfs = fs.max()
         norm_const = 2 * torch.log(torch.tensor(2 * pi)) + mfs + (fs - mfs).logsumexp(0)
         return norm_const.reshape(self.phi_loc.shape)
@@ -205,7 +223,7 @@ class SineBivariateVonMises(TorchDistribution):
             curr_b0 = b0[missing > 0]
 
             x = (
-                torch.distributions.Normal(0.0, torch.sqrt(1 + 2 * curr_eig / curr_b0))
+                torch.distributions.Normal(0.0, torch.rsqrt(1 + 2 * curr_eig / curr_b0))
                 .sample((missing[missing > 0].min(),))
                 .view(2, -1, missing[missing > 0].min())
             )

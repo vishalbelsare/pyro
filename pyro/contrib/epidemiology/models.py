@@ -615,7 +615,7 @@ class SuperspreadingSEIRModel(CompartmentalModel):
         data,
         *,
         leaf_times=None,
-        coal_times=None
+        coal_times=None,
     ):
         compartments = ("S", "E", "I")  # R is implicit.
         duration = len(data)
@@ -680,9 +680,11 @@ class SuperspreadingSEIRModel(CompartmentalModel):
             coal_rate = R * (1.0 + 1.0 / k) / (tau_i * state["I"] + 1e-8)
             pyro.factor(
                 "coalescent_{}".format(t),
-                self.coal_likelihood(coal_rate, t)
-                if t_is_observed
-                else torch.tensor(0.0),
+                (
+                    self.coal_likelihood(coal_rate, t)
+                    if t_is_observed
+                    else torch.tensor(0.0)
+                ),
             )
 
         # Update compartements with flows.
@@ -1280,9 +1282,7 @@ __doc__ = "\n\n".join(
     {}
     ----------------------------------------------------------------
     .. autoclass:: pyro.contrib.epidemiology.models.{}
-    """.format(
-            re.sub("([A-Z][a-z]+)", r"\1 ", _name[:-5]), _name
-        )
+    """.format(re.sub("([A-Z][a-z]+)", r"\1 ", _name[:-5]), _name)
         for _name in __all__
     ]
 )

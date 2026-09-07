@@ -21,6 +21,7 @@ using components :class:`Model`, :class:`Guide`,
     | http://papers.nips.cc/paper/7223-causal-effect-inference-with-deep-latent-variable-models.pdf
     | https://github.com/AMLab-Amsterdam/CEVAE
 """
+
 import logging
 
 import torch
@@ -271,7 +272,7 @@ class PreWhitener(nn.Module):
         super().__init__()
         with torch.no_grad():
             loc = data.mean(0)
-            scale = data.std(0)
+            scale = data.std(0, unbiased=False)
             scale[~(scale > 0)] = 1.0
             self.register_buffer("loc", loc)
             self.register_buffer("inv_scale", scale.reciprocal())
@@ -574,7 +575,12 @@ class CEVAE(nn.Module):
         self.whiten = PreWhitener(x)
 
         dataset = TensorDataset(x, t, y)
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            generator=torch.Generator(device=x.device),
+        )
         logger.info("Training with {} minibatches per epoch".format(len(dataloader)))
         num_steps = num_epochs * len(dataloader)
         optim = ClippedAdam(

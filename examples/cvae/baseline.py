@@ -34,8 +34,12 @@ class MaskedBCELoss(nn.Module):
 
     def forward(self, input, target):
         target = target.view(input.shape)
-        loss = F.binary_cross_entropy(input, target, reduction="none")
-        loss[target == self.masked_with] = 0
+        # only calculate loss on target pixels (value = -1)
+        loss = F.binary_cross_entropy(
+            input[target != self.masked_with],
+            target[target != self.masked_with],
+            reduction="none",
+        )
         return loss.sum()
 
 
@@ -48,7 +52,6 @@ def train(
     early_stop_patience,
     model_path,
 ):
-
     # Train baseline
     baseline_net = BaselineNet(500, 500)
     baseline_net.to(device)

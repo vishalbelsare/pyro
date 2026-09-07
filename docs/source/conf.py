@@ -4,8 +4,6 @@
 import os
 import sys
 
-import sphinx_rtd_theme
-
 # import pkg_resources
 
 # -*- coding: utf-8 -*-
@@ -47,6 +45,8 @@ extensions = [
     "sphinx.ext.graphviz",  #
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
+    'sphinx.ext.napoleon',
+    "sphinx_copybutton",
 ]
 
 # Disable documentation inheritance so as to avoid inheriting
@@ -80,7 +80,7 @@ version = ""
 
 if "READTHEDOCS" not in os.environ:
     # if developing locally, use pyro.__version__ as version
-    from pyro import __version__  # noqaE402
+    from pyro import __version__  # noqa: E402
 
     version = __version__
 
@@ -92,7 +92,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -120,7 +120,6 @@ html_favicon = "_static/img/favicon/favicon.ico"
 # a list of builtin themes.
 #
 html_theme = "sphinx_rtd_theme"
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -192,11 +191,11 @@ texinfo_documents = [
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
-    "torch": ("https://pytorch.org/docs/master/", None),
-    "funsor": ("http://funsor.pyro.ai/en/stable/", None),
+    "torch": ("https://pytorch.org/docs/main/", None),
+    "funsor": ("https://funsor.pyro.ai/en/stable/", None),
     "opt_einsum": ("https://optimized-einsum.readthedocs.io/en/stable/", None),
-    "scipy": ("https://docs.scipy.org/doc/scipy/reference/", None),
-    "Bio": ("https://biopython.org/docs/latest/api/", None),
+    "scipy": ("https://docs.scipy.org/doc/scipy/", None),
+    "Bio": ("https://biopython.org/docs/latest/", None),
     "horovod": ("https://horovod.readthedocs.io/en/stable/", None),
     "graphviz": ("https://graphviz.readthedocs.io/en/stable/", None),
 }
@@ -222,6 +221,6 @@ def setup(app):
 if "READTHEDOCS" in os.environ:
     os.system("pip install numpy")
     os.system(
-        "pip install torch==1.9.0+cpu torchvision==0.10.0+cpu "
+        "pip install torch==2.0+cpu torchvision==0.15.0+cpu "
         "-f https://download.pytorch.org/whl/torch_stable.html"
     )

@@ -19,10 +19,10 @@ class SparseGPRegression(GPModel):
     the covariance matrix :math:`k(X, X)` will require a lot of computational steps to
     compute its inverse (for log likelihood and for prediction). By introducing an
     additional inducing-input parameter :math:`X_u`, we can reduce computational cost
-    by approximate :math:`k(X, X)` by a low-rank Nymstr\u00F6m approximation :math:`Q`
+    by approximate :math:`k(X, X)` by a low-rank Nystr\u00f6m approximation :math:`Q`
     (see reference [1]), where
 
-    .. math:: Q = k(X, X_u) k(X,X)^{-1} k(X_u, X).
+    .. math:: Q = k(X, X_u) k(X_u,X_u)^{-1} k(X_u, X).
 
     Given inputs :math:`X`, their noisy observations :math:`y`, and the inducing-input
     parameters :math:`X_u`, the model takes the form:
@@ -62,7 +62,7 @@ class SparseGPRegression(GPModel):
 
     + Variational Free Energy (VFE), which is similar to DTC but has an additional
       `trace_term` in the model's log likelihood. This additional term makes "VFE"
-      equivalent to the variational approach in :class:`.SparseVariationalGP`
+      equivalent to the variational approach in :class:`.VariationalSparseGP`
       (see reference [2]).
 
     .. note:: This model has :math:`\\mathcal{O}(NM^2)` complexity for training,
@@ -72,7 +72,7 @@ class SparseGPRegression(GPModel):
     References:
 
     [1] `A Unifying View of Sparse Approximate Gaussian Process Regression`,
-    Joaquin Qui\u00F1onero-Candela, Carl E. Rasmussen
+    Joaquin Qui\u00f1onero-Candela, Carl E. Rasmussen
 
     [2] `Variational learning of inducing variables in sparse Gaussian processes`,
     Michalis Titsias
@@ -98,17 +98,16 @@ class SparseGPRegression(GPModel):
     def __init__(
         self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6
     ):
-
-        assert isinstance(
-            X, torch.Tensor
-        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        assert isinstance(X, torch.Tensor), (
+            "X needs to be a torch Tensor instead of a {}".format(type(X))
+        )
         if y is not None:
-            assert isinstance(
-                y, torch.Tensor
-            ), "y needs to be a torch Tensor instead of a {}".format(type(y))
-        assert isinstance(
-            Xu, torch.Tensor
-        ), "Xu needs to be a torch Tensor instead of a {}".format(type(Xu))
+            assert isinstance(y, torch.Tensor), (
+                "y needs to be a torch Tensor instead of a {}".format(type(y))
+            )
+        assert isinstance(Xu, torch.Tensor), (
+            "Xu needs to be a torch Tensor instead of a {}".format(type(Xu))
+        )
 
         super().__init__(X, y, kernel, mean_function, jitter)
 
@@ -123,8 +122,7 @@ class SparseGPRegression(GPModel):
             self.approx = approx
         else:
             raise ValueError(
-                "The sparse approximation method should be one of "
-                "'DTC', 'FITC', 'VFE'."
+                "The sparse approximation method should be one of 'DTC', 'FITC', 'VFE'."
             )
 
     @pyro_method
@@ -146,7 +144,7 @@ class SparseGPRegression(GPModel):
         Kuu.view(-1)[:: M + 1] += self.jitter  # add jitter to the diagonal
         Luu = torch.linalg.cholesky(Kuu)
         Kuf = self.kernel(self.Xu, self.X)
-        W = Kuf.triangular_solve(Luu, upper=False)[0].t()
+        W = torch.linalg.solve_triangular(Luu, Kuf, upper=False).t()
 
         D = self.noise.expand(N)
         if self.approx == "FITC" or self.approx == "VFE":
@@ -227,7 +225,7 @@ class SparseGPRegression(GPModel):
 
         Kuf = self.kernel(self.Xu, self.X)
 
-        W = Kuf.triangular_solve(Luu, upper=False)[0]
+        W = torch.linalg.solve_triangular(Luu, Kuf, upper=False)
         D = self.noise.expand(N)
         if self.approx == "FITC":
             Kffdiag = self.kernel(self.X, diag=True)
@@ -247,9 +245,9 @@ class SparseGPRegression(GPModel):
         # End caching ----------
 
         Kus = self.kernel(self.Xu, Xnew)
-        Ws = Kus.triangular_solve(Luu, upper=False)[0]
+        Ws = torch.linalg.solve_triangular(Luu, Kus, upper=False)
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
-        Linv_pack = pack.triangular_solve(L, upper=False)[0]
+        Linv_pack = torch.linalg.solve_triangular(L, pack, upper=False)
         # unpack
         Linv_W_Dinv_y = Linv_pack[:, : W_Dinv_y.shape[1]]
         Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1] :]

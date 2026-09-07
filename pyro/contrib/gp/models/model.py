@@ -61,7 +61,6 @@ class GPModel(Parameterized):
         >>> loss_fn = pyro.infer.TraceMeanField_ELBO().differentiable_loss
         >>>
         >>> for i in range(1000):
-        ...     svi.step()  # doctest: +SKIP
         ...     optimizer.zero_grad()
         ...     loss = loss_fn(gpr.model, gpr.guide)  # doctest: +SKIP
         ...     loss.backward()  # doctest: +SKIP
@@ -91,13 +90,13 @@ class GPModel(Parameterized):
     """
 
     def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6):
-        assert isinstance(
-            X, torch.Tensor
-        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        assert isinstance(X, torch.Tensor), (
+            "X needs to be a torch Tensor instead of a {}".format(type(X))
+        )
         if y is not None:
-            assert isinstance(
-                y, torch.Tensor
-            ), "y needs to be a torch Tensor instead of a {}".format(type(y))
+            assert isinstance(y, torch.Tensor), (
+                "y needs to be a torch Tensor instead of a {}".format(type(y))
+            )
 
         super().__init__()
         self.set_data(X, y)
@@ -168,7 +167,6 @@ class GPModel(Parameterized):
             >>> for Xi, yi in zip(batched_X, batched_y):
             ...     optimizer.zero_grad()
             ...     vsgp.set_data(Xi, yi)
-            ...     svi.step()  # doctest: +SKIP
             ...     loss = loss_fn(vsgp.model, vsgp.guide)  # doctest: +SKIP
             ...     loss.backward()  # doctest: +SKIP
             ...     optimizer.step()

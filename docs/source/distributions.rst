@@ -190,6 +190,13 @@ GaussianScaleMixture
     :undoc-members:
     :show-inheritance:
 
+GroupedNormalNormal
+-------------------
+.. autoclass:: pyro.distributions.GroupedNormalNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ImproperUniform
 ---------------
 .. autoclass:: pyro.distributions.improper_uniform.ImproperUniform
@@ -277,6 +284,20 @@ MixtureOfDiagNormalsSharedCovariance
 MultivariateStudentT
 --------------------
 .. autoclass:: pyro.distributions.MultivariateStudentT
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+NanMaskedNormal
+---------------
+.. autoclass:: pyro.distributions.NanMaskedNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+NanMaskedMultivariateNormal
+---------------------------
+.. autoclass:: pyro.distributions.NanMaskedMultivariateNormal
     :members:
     :undoc-members:
     :show-inheritance:
@@ -386,6 +407,13 @@ Stable
     :undoc-members:
     :show-inheritance:
 
+StableWithLogProb
+-----------------
+.. autoclass:: pyro.distributions.StableWithLogProb
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 TruncatedPolyaGamma
 -------------------
 .. autoclass:: pyro.distributions.TruncatedPolyaGamma
@@ -441,13 +469,6 @@ ConditionalTransform
 CholeskyTransform
 -----------------
 .. autoclass:: pyro.distributions.transforms.CholeskyTransform
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-CorrLCholeskyTransform
-----------------------
-.. autoclass:: pyro.distributions.transforms.CorrLCholeskyTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -518,6 +539,13 @@ Permute
 PositivePowerTransform
 ----------------------
 .. autoclass:: pyro.distributions.transforms.PositivePowerTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SimplexToOrderedTransform
+-------------------------
+.. autoclass:: pyro.distributions.transforms.SimplexToOrderedTransform
     :members:
     :undoc-members:
     :show-inheritance:

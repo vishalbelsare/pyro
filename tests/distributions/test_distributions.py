@@ -143,7 +143,8 @@ def test_gof(continuous_dist):
     num_samples = 50000
     for i in range(continuous_dist.get_num_test_data()):
         d = Dist(**continuous_dist.get_dist_params(i))
-        samples = d.sample(torch.Size([num_samples]))
+        with torch.random.fork_rng():
+            samples = d.sample(torch.Size([num_samples]))
         with xfail_if_not_implemented():
             probs = d.log_prob(samples).exp()
 
@@ -170,6 +171,7 @@ def test_mean(continuous_dist):
         "SineBivariateVonMises",
         "VonMises",
         "ProjectedNormal",
+        "Stable",
     ]:
         pytest.xfail(reason="Euclidean mean is not defined")
     for i in range(continuous_dist.get_num_test_data()):
@@ -309,8 +311,6 @@ def test_expand_by(dist, sample_shape, shape_type):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
         large = small.expand_by(shape_type(sample_shape))
         assert large.batch_shape == sample_shape + small.batch_shape
-        if dist.get_test_distribution_name() == "Stable":
-            pytest.skip("Stable does not implement a log_prob method.")
         check_sample_shapes(small, large)
 
 
@@ -328,8 +328,6 @@ def test_expand_new_dim(dist, sample_shape, shape_type, default):
             with xfail_if_not_implemented():
                 large = small.expand(shape_type(sample_shape + small.batch_shape))
         assert large.batch_shape == sample_shape + small.batch_shape
-        if dist.get_test_distribution_name() == "Stable":
-            pytest.skip("Stable does not implement a log_prob method.")
         check_sample_shapes(small, large)
 
 
@@ -350,8 +348,6 @@ def test_expand_existing_dim(dist, shape_type, default):
                 with xfail_if_not_implemented():
                     large = small.expand(shape_type(batch_shape))
             assert large.batch_shape == batch_shape
-            if dist.get_test_distribution_name() == "Stable":
-                pytest.skip("Stable does not implement a log_prob method.")
             check_sample_shapes(small, large)
 
 

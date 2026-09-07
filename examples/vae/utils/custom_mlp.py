@@ -99,9 +99,9 @@ class MLP(nn.Module):
         )
 
         # assume int or list
-        assert isinstance(
-            input_size, (int, list, tuple)
-        ), "input_size must be int, list, tuple"
+        assert isinstance(input_size, (int, list, tuple)), (
+            "input_size must be int, list, tuple"
+        )
 
         # everything in MLP will be concatted if it's multiple arguments
         last_layer_size = input_size if type(input_size) == int else sum(input_size)
@@ -119,10 +119,6 @@ class MLP(nn.Module):
             # for numerical stability -- initialize the layer properly
             cur_linear_layer.weight.data.normal_(0, 0.001)
             cur_linear_layer.bias.data.normal_(0, 0.001)
-
-            # use GPUs to share data during training (if available)
-            if use_cuda:
-                cur_linear_layer = nn.DataParallel(cur_linear_layer)
 
             # add our linear layer
             all_modules.append(cur_linear_layer)
@@ -155,9 +151,9 @@ class MLP(nn.Module):
 
         # now we have all of our hidden layers
         # we handle outputs
-        assert isinstance(
-            output_size, (int, list, tuple)
-        ), "output_size must be int, list, tuple"
+        assert isinstance(output_size, (int, list, tuple)), (
+            "output_size must be int, list, tuple"
+        )
 
         if type(output_size) == int:
             all_modules.append(nn.Linear(last_layer_size, output_size))
@@ -168,13 +164,11 @@ class MLP(nn.Module):
                     else output_activation
                 )
         else:
-
             # we're going to have a bunch of separate layers we can spit out (a tuple of outputs)
             out_layers = []
 
             # multiple outputs? handle separately
             for out_ix, out_size in enumerate(output_size):
-
                 # for a single output object, we create a linear layer and some weights
                 split_layer = []
 

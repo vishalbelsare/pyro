@@ -25,9 +25,9 @@ class NamedMessenger(ReentrantMessenger):
     """
 
     def __init__(self, first_available_dim=None):
-        assert (
-            first_available_dim is None or first_available_dim < 0
-        ), first_available_dim
+        assert first_available_dim is None or first_available_dim < 0, (
+            first_available_dim
+        )
         self.first_available_dim = first_available_dim
         self._saved_dims = set()
         return super().__init__()
@@ -59,7 +59,6 @@ class NamedMessenger(ReentrantMessenger):
 
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_data(msg):
-
         (funsor_value,) = msg["args"]
         name_to_dim = msg["kwargs"].setdefault("name_to_dim", OrderedDict())
         dim_type = msg["kwargs"].setdefault("dim_type", DimType.LOCAL)
@@ -82,7 +81,6 @@ class NamedMessenger(ReentrantMessenger):
 
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_funsor(msg):
-
         if len(msg["args"]) == 2:
             raw_value, output = msg["args"]
         else:

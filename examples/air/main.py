@@ -9,7 +9,6 @@ understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
 
-
 import argparse
 import math
 import os
@@ -18,7 +17,6 @@ from functools import partial
 
 import numpy as np
 import torch
-import visdom
 from air import AIR, latents_to_tensor
 from viz import draw_many, tensor_to_objs
 
@@ -50,7 +48,7 @@ def count_accuracy(X, true_counts, air, batch_size):
         true_counts_m = count_vec_to_mat(true_counts_batch, 2)
         inferred_counts_m = count_vec_to_mat(inferred_counts, 3)
         counts += torch.mm(true_counts_m.t(), inferred_counts_m)
-        error_ind = 1 - (true_counts_batch == inferred_counts)
+        error_ind = 1 - (true_counts_batch == inferred_counts).long()
         error_ix = error_ind.nonzero(as_tuple=False).squeeze()
         error_latents.append(
             latents_to_tensor((z_where, z_pres)).index_select(0, error_ix)
@@ -128,7 +126,6 @@ def load_data():
 
 
 def main(**kwargs):
-
     args = argparse.Namespace(**kwargs)
 
     if "save" in args:
@@ -192,7 +189,7 @@ def main(**kwargs):
         use_baselines=not args.no_baselines,
         z_what_size=args.encoder_latent_size,
         use_cuda=args.cuda,
-        **model_args
+        **model_args,
     )
 
     if args.verbose:
@@ -201,10 +198,12 @@ def main(**kwargs):
 
     if "load" in args:
         print("Loading parameters...")
-        air.load_state_dict(torch.load(args.load))
+        air.load_state_dict(torch.load(args.load, weights_only=False))
 
     # Viz sample from prior.
     if args.viz:
+        import visdom
+
         vis = visdom.Visdom(env=args.visdom_env)
         z, x = air.prior(5, z_pres_prior_p=partial(z_pres_prior_p, 0))
         vis.images(draw_many(x, tensor_to_objs(latents_to_tensor(z))))
@@ -229,7 +228,6 @@ def main(**kwargs):
     examples_to_viz = X[5:10]
 
     for i in range(1, args.num_steps + 1):
-
         loss = svi.step(
             X, batch_size=args.batch_size, z_pres_prior_p=partial(z_pres_prior_p, i)
         )
@@ -272,7 +270,7 @@ def main(**kwargs):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.9.1")
     parser = argparse.ArgumentParser(
         description="Pyro AIR example", argument_default=argparse.SUPPRESS
     )

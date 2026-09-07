@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+import re
+import textwrap
 
 import torch
 
@@ -9,6 +11,7 @@ from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.ops.special import log_binomial
 
+from .. import settings
 from . import constraints
 
 
@@ -96,6 +99,22 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
             - normalize_term
             + log_binomial(n, k, tol=self.approx_log_prob_tol)
         )
+
+
+@settings.register(
+    "binomial_approx_sample_thresh", __name__, "Binomial.approx_sample_thresh"
+)
+def _validate_thresh(thresh):
+    assert isinstance(thresh, float)
+    assert 0 < thresh
+
+
+@settings.register(
+    "binomial_approx_log_prob_tol", __name__, "Binomial.approx_log_prob_tol"
+)
+def _validate_tol(tol):
+    assert isinstance(tol, float)
+    assert 0 <= tol
 
 
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
@@ -312,13 +331,71 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         new._unbroadcasted_high = self._unbroadcasted_high
         return new
 
+    @staticmethod
+    def infer_shapes(low, high):
+        return torch.Size(broadcast_shape(low, high)), torch.Size()
+
     @constraints.dependent_property(is_discrete=False, event_dim=0)
     def support(self):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
 
 
-# Programmatically load all distributions from PyTorch.
-__all__ = []
+def _cat_docstrings(*docstrings):
+    result = "\n".join(textwrap.dedent(s.lstrip("\n")) for s in docstrings)
+    result = re.sub("\n\n+", "\n\n", result)
+    # Drop torch-specific lines.
+    result = "".join(
+        line for line in result.splitlines(keepends=True) if "xdoctest" not in line
+    )
+    return result
+
+
+# Add static imports to help mypy.
+__all__ = [  # noqa: F822
+    "Bernoulli",
+    "Beta",
+    "Binomial",
+    "Categorical",
+    "Cauchy",
+    "Chi2",
+    "ContinuousBernoulli",
+    "Dirichlet",
+    "ExponentialFamily",
+    "Exponential",
+    "FisherSnedecor",
+    "Gamma",
+    "Geometric",
+    "Gumbel",
+    "HalfCauchy",
+    "HalfNormal",
+    "Independent",
+    "Kumaraswamy",
+    "Laplace",
+    "LKJCholesky",
+    "LogNormal",
+    "LogisticNormal",
+    "LowRankMultivariateNormal",
+    "MixtureSameFamily",
+    "Multinomial",
+    "MultivariateNormal",
+    "NegativeBinomial",
+    "Normal",
+    "OneHotCategorical",
+    "OneHotCategoricalStraightThrough",
+    "Pareto",
+    "Poisson",
+    "RelaxedBernoulli",
+    "RelaxedOneHotCategorical",
+    "StudentT",
+    "TransformedDistribution",
+    "Uniform",
+    "VonMises",
+    "Weibull",
+    "Wishart",
+]
+
+# Programmatically load all distributions from PyTorch,
+# updating __all__ to include any new distributions.
 for _name, _Dist in torch.distributions.__dict__.items():
     if not isinstance(_Dist, type):
         continue
@@ -337,11 +414,11 @@ for _name, _Dist in torch.distributions.__dict__.items():
     _PyroDist.__doc__ = """
     Wraps :class:`{}.{}` with
     :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
-    """.format(
-        _Dist.__module__, _Dist.__name__
-    )
 
+    """.format(_Dist.__module__, _Dist.__name__)
+    _PyroDist.__doc__ = _cat_docstrings(_PyroDist.__doc__, _Dist.__doc__)
     __all__.append(_name)
+__all__ = sorted(set(__all__))
 
 
 # Create sphinx documentation.
@@ -351,9 +428,10 @@ __doc__ = "\n\n".join(
     {0}
     ----------------------------------------------------------------
     .. autoclass:: pyro.distributions.{0}
-    """.format(
-            _name
-        )
+    """.format(_name)
         for _name in sorted(__all__)
+        # Work around sphinx autodoc error in case two InverseGamma's are defined:
+        # "duplicate object description of pyro.distributions.InverseGamma"
+        if _name != "InverseGamma"
     ]
 )

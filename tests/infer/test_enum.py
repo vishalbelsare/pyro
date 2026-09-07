@@ -36,7 +36,7 @@ def _skip_cuda(*args):
     return skipif_param(
         *args,
         condition="CUDA_TEST" in os.environ,
-        reason="https://github.com/pyro-ppl/pyro/issues/1380"
+        reason="https://github.com/pyro-ppl/pyro/issues/1380",
     )
 
 
@@ -4011,7 +4011,6 @@ def test_backwardsample_posterior_restrictions(
 
 @pytest.mark.parametrize("num_samples", [10000, 100000])
 def test_vectorized_importance(num_samples):
-
     pyro.param(
         "model_probs_a", torch.tensor([0.45, 0.55]), constraint=constraints.simplex
     )

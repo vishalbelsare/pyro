@@ -70,6 +70,8 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
     @property
     def time_plate(self):
         """
+        Helper to create a ``pyro.plate`` over time.
+
         :returns: A plate named "time" with size ``covariates.size(-2)`` and
             ``dim=-1``. This is available only during model execution.
         :rtype: :class:`~pyro.plate`
@@ -279,7 +281,7 @@ class Forecaster(nn.Module):
         num_particles=1,
         vectorize_particles=True,
         warm_start=False,
-        log_every=100
+        log_every=100,
     ):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
@@ -434,7 +436,7 @@ class HMCForecaster(nn.Module):
         time_reparam=None,
         dense_mass=False,
         jit_compile=False,
-        max_tree_depth=10
+        max_tree_depth=10,
     ):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()

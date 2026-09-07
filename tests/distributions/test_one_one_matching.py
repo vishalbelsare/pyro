@@ -82,9 +82,9 @@ def assert_grads_agree(logits):
     d2 = dist.OneOneMatching(logits, bp_iters=BP_ITERS)
     expected = torch.autograd.grad(d1.log_partition_function, [logits])[0]
     actual = torch.autograd.grad(d2.log_partition_function, [logits])[0]
-    assert torch.allclose(
-        actual, expected, atol=0.2, rtol=1e-3
-    ), f"Expected:\n{expected.numpy()}\nActual:\n{actual.numpy()}"
+    assert torch.allclose(actual, expected, atol=0.2, rtol=1e-3), (
+        f"Expected:\n{expected.numpy()}\nActual:\n{actual.numpy()}"
+    )
 
 
 @pytest.mark.parametrize("num_nodes", [2, 3, 4, 5])
@@ -112,7 +112,6 @@ def test_grad_hard(num_nodes):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_nodes", [1, 2, 3, 4, 5, 6, 7, 8])
 def test_mode(num_nodes, dtype):
-    pytest.importorskip("lap")
     logits = torch.randn(num_nodes, num_nodes, dtype=dtype) * 10
     d = dist.OneOneMatching(logits)
     values = d.enumerate_support()
@@ -120,12 +119,12 @@ def test_mode(num_nodes, dtype):
     expected = values[i]
     actual = d.mode()
     assert_equal(actual, expected)
+    assert (actual == expected).all()
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_nodes", [3, 5, 8, 13, 100, 1000])
 def test_mode_smoke(num_nodes, dtype):
-    pytest.importorskip("lap")
     logits = torch.randn(num_nodes, num_nodes, dtype=dtype) * 10
     d = dist.OneOneMatching(logits)
     value = d.mode()
@@ -136,7 +135,6 @@ def test_mode_smoke(num_nodes, dtype):
 @pytest.mark.parametrize("num_nodes", [2, 3, 4, 5, 6])
 @pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_sample(num_nodes, dtype, bp_iters):
-    pytest.importorskip("lap")
     logits = torch.randn(num_nodes, num_nodes, dtype=dtype) * 10
     d = dist.OneOneMatching(logits, bp_iters=bp_iters)
 
